@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 import joblib
 import numpy as np
@@ -54,6 +54,15 @@ def predecir():
         entrada_df.to_csv(archivo, index=False)
 
     return jsonify(resultados)
+
+# ✅ NUEVO ENDPOINT PARA DESCARGAR EL CSV
+@app.route("/descargar", methods=["GET"])
+def descargar():
+    archivo = "respuestas_pss10_multi.csv"
+    if os.path.exists(archivo):
+        return send_file(archivo, as_attachment=True)
+    else:
+        return jsonify({"error": "El archivo no existe aún."}), 404
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
