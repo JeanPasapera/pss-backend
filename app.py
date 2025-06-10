@@ -7,8 +7,8 @@ from datetime import datetime
 from pymongo import MongoClient
 import os
 
-app = Flask(__name__)
-CORS(app)
+from flask_cors import CORS
+CORS(app, origins=["https://testpss10.christianovalle.com"])
 
 modelos = {
     "MLP": joblib.load("modelos/modelo_mlp.pkl"),
