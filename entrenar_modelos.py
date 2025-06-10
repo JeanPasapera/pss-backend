@@ -9,10 +9,8 @@ from lightgbm import LGBMClassifier
 import joblib
 import os
 
-# Crear carpeta si no existe
 os.makedirs("modelos", exist_ok=True)
 
-# Dataset simulado
 np.random.seed(42)
 data = pd.DataFrame(np.random.randint(0, 5, size=(300, 10)), columns=[f"Q{i+1}" for i in range(10)])
 data["score"] = data.sum(axis=1)

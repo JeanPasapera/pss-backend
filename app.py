@@ -57,12 +57,8 @@ def predecir():
 
     return jsonify(resultados)
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
-
 @app.route("/estadisticas", methods=["GET"])
 def estadisticas():
-    # Diccionario para almacenar resultados por modelo
     stats = {
         "MLP": {"Bajo": 0, "Medio": 0, "Alto": 0},
         "XGBoost": {"Bajo": 0, "Medio": 0, "Alto": 0},
@@ -70,7 +66,6 @@ def estadisticas():
         "HistGradientBoosting": {"Bajo": 0, "Medio": 0, "Alto": 0},
     }
 
-    # Recorrer todos los documentos
     for doc in coleccion.find():
         for modelo in stats.keys():
             pred = doc.get(f"pred_{modelo}")
@@ -78,3 +73,6 @@ def estadisticas():
                 stats[modelo][pred] += 1
 
     return jsonify(stats)
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
