@@ -1,10 +1,10 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from pymongo import MongoClient
+from datetime import datetime
+import pandas as pd
 import joblib
 import numpy as np
-import pandas as pd
-from datetime import datetime
-from pymongo import MongoClient
 import os
 
 app = Flask(__name__)
@@ -21,7 +21,7 @@ niveles = {0: "Bajo", 1: "Medio", 2: "Alto"}
 
 MONGO_URI = os.getenv("MONGO_URI", "mongodb+srv://pss_user:Pasapera2310.@gptcluster.hj5l4pa.mongodb.net/?retryWrites=true&w=majority&appName=GPTCluster")
 client = MongoClient(MONGO_URI)
-db = client.pss
+db = client.pss_datos
 coleccion = db.respuestas
 
 @app.route("/")
@@ -30,49 +30,62 @@ def index():
 
 @app.route("/predecir", methods=["POST"])
 def predecir():
-    data = request.get_json()
-    respuestas = data.get("respuestas", [])
-    edad = data.get("edad")
-    genero = data.get("genero")
+    try:
+        data = request.get_json()
 
-    if len(respuestas) != 10:
-        return jsonify({"error": "Debes enviar exactamente 10 respuestas"}), 400
+        respuestas = data.get("respuestas", [])
+        edad = data.get("edad", None)
+        genero = data.get("genero", "Sin especificar")
 
-    entrada_df = pd.DataFrame([respuestas], columns=[f"Q{i+1}" for i in range(10)])
-    resultados = {}
+        if not isinstance(respuestas, list) or len(respuestas) != 10:
+            return jsonify({"error": "Debes enviar exactamente 10 respuestas."}), 400
 
-    for nombre, modelo in modelos.items():
-        pred = modelo.predict(entrada_df)[0]
-        resultados[nombre] = niveles.get(pred, "Desconocido")
+        entrada_df = pd.DataFrame([respuestas], columns=[f"Q{i+1}" for i in range(10)])
 
-    doc = {
-        "respuestas": respuestas,
-        "edad": edad,
-        "genero": genero,
-        "timestamp": datetime.now(),
-        **{f"pred_{nombre}": resultados[nombre] for nombre in modelos}
-    }
+        resultados = {}
+        for nombre, modelo in modelos.items():
+            pred = modelo.predict(entrada_df)[0]
+            resultados[nombre] = niveles.get(pred, "Desconocido")
 
-    coleccion.insert_one(doc)
+        registro = {
+            "respuestas": respuestas,
+            "edad": edad,
+            "genero": genero,
+            "timestamp": datetime.utcnow(),
+        }
 
-    return jsonify(resultados)
+        for nombre in modelos:
+            registro[f"pred_{nombre}"] = resultados[nombre]
+
+        coleccion.insert_one(registro)
+
+        return jsonify(resultados)
+
+    except Exception as e:
+        print("❌ Error en /predecir:", str(e))
+        return jsonify({"error": "Error interno del servidor."}), 500
 
 @app.route("/estadisticas", methods=["GET"])
 def estadisticas():
-    stats = {
-        "MLP": {"Bajo": 0, "Medio": 0, "Alto": 0},
-        "XGBoost": {"Bajo": 0, "Medio": 0, "Alto": 0},
-        "LightGBM": {"Bajo": 0, "Medio": 0, "Alto": 0},
-        "HistGradientBoosting": {"Bajo": 0, "Medio": 0, "Alto": 0},
-    }
+    try:
+        stats = {
+            "MLP": {"Bajo": 0, "Medio": 0, "Alto": 0},
+            "XGBoost": {"Bajo": 0, "Medio": 0, "Alto": 0},
+            "LightGBM": {"Bajo": 0, "Medio": 0, "Alto": 0},
+            "HistGradientBoosting": {"Bajo": 0, "Medio": 0, "Alto": 0},
+        }
 
-    for doc in coleccion.find():
-        for modelo in stats.keys():
-            pred = doc.get(f"pred_{modelo}")
-            if pred in stats[modelo]:
-                stats[modelo][pred] += 1
+        for doc in coleccion.find():
+            for modelo in stats.keys():
+                pred = doc.get(f"pred_{modelo}")
+                if pred in stats[modelo]:
+                    stats[modelo][pred] += 1
 
-    return jsonify(stats)
+        return jsonify(stats)
+
+    except Exception as e:
+        print("❌ Error en /estadisticas:", str(e))
+        return jsonify({"error": "No se pudieron calcular las estadísticas."}), 500
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
