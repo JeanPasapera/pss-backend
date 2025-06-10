@@ -1,15 +1,15 @@
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 import joblib
 import numpy as np
 import pandas as pd
 from datetime import datetime
+from pymongo import MongoClient
 import os
 
 app = Flask(__name__)
 CORS(app)
 
-# Cargar modelos desde la carpeta "modelos"
 modelos = {
     "MLP": joblib.load("modelos/modelo_mlp.pkl"),
     "XGBoost": joblib.load("modelos/modelo_xgb.pkl"),
@@ -18,6 +18,11 @@ modelos = {
 }
 
 niveles = {0: "Bajo", 1: "Medio", 2: "Alto"}
+
+MONGO_URI = os.getenv("MONGO_URI", "mongodb+srv://<pss_user>:<Pasapera2310.>@gptcluster.hj5l4pa.mongodb.net/?retryWrites=true&w=majority&appName=GPTCluster")
+client = MongoClient(MONGO_URI)
+db = client.pss
+coleccion = db.respuestas
 
 @app.route("/")
 def index():
@@ -34,35 +39,42 @@ def predecir():
         return jsonify({"error": "Debes enviar exactamente 10 respuestas"}), 400
 
     entrada_df = pd.DataFrame([respuestas], columns=[f"Q{i+1}" for i in range(10)])
-
     resultados = {}
+
     for nombre, modelo in modelos.items():
         pred = modelo.predict(entrada_df)[0]
         resultados[nombre] = niveles.get(pred, "Desconocido")
 
-    # Agregar info personal y predicciones
-    entrada_df["edad"] = edad
-    entrada_df["genero"] = genero
-    entrada_df["timestamp"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    for nombre in modelos:
-        entrada_df[f"pred_{nombre}"] = resultados[nombre]
+    doc = {
+        "respuestas": respuestas,
+        "edad": edad,
+        "genero": genero,
+        "timestamp": datetime.now(),
+        **{f"pred_{nombre}": resultados[nombre] for nombre in modelos}
+    }
 
-    archivo = "respuestas_pss10_multi.csv"
-    if os.path.exists(archivo):
-        entrada_df.to_csv(archivo, mode="a", index=False, header=False)
-    else:
-        entrada_df.to_csv(archivo, index=False)
+    coleccion.insert_one(doc)
 
     return jsonify(resultados)
 
-# ✅ NUEVO ENDPOINT PARA DESCARGAR EL CSV
-@app.route("/descargar", methods=["GET"])
-def descargar():
-    archivo = "respuestas_pss10_multi.csv"
-    if os.path.exists(archivo):
-        return send_file(archivo, as_attachment=True)
-    else:
-        return jsonify({"error": "El archivo no existe aún."}), 404
-
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
+
+@app.route("/estadisticas", methods=["GET"])
+def estadisticas():
+    # Diccionario para almacenar resultados por modelo
+    stats = {
+        "MLP": {"Bajo": 0, "Medio": 0, "Alto": 0},
+        "XGBoost": {"Bajo": 0, "Medio": 0, "Alto": 0},
+        "LightGBM": {"Bajo": 0, "Medio": 0, "Alto": 0},
+        "HistGradientBoosting": {"Bajo": 0, "Medio": 0, "Alto": 0},
+    }
+
+    # Recorrer todos los documentos
+    for doc in coleccion.find():
+        for modelo in stats.keys():
+            pred = doc.get(f"pred_{modelo}")
+            if pred in stats[modelo]:
+                stats[modelo][pred] += 1
+
+    return jsonify(stats)
