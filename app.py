@@ -19,7 +19,7 @@ modelos = {
 
 niveles = {0: "Bajo", 1: "Medio", 2: "Alto"}
 
-MONGO_URI = os.getenv("MONGO_URI", "mongodb+srv://<pss_user>:<Pasapera2310.>@gptcluster.hj5l4pa.mongodb.net/?retryWrites=true&w=majority&appName=GPTCluster")
+MONGO_URI = os.getenv("MONGO_URI", "mongodb+srv://pss_user:Pasapera2310.@gptcluster.hj5l4pa.mongodb.net/?retryWrites=true&w=majority&appName=GPTCluster")
 client = MongoClient(MONGO_URI)
 db = client.pss
 coleccion = db.respuestas
