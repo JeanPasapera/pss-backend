@@ -7,7 +7,7 @@ from datetime import datetime
 from pymongo import MongoClient
 import os
 
-from flask_cors import CORS
+app = Flask(__name__)
 CORS(app, origins=["https://testpss10.christianovalle.com"])
 
 modelos = {
