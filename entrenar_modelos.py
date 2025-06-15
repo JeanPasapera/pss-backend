@@ -1,49 +1,58 @@
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.neural_network import MLPClassifier
 from sklearn.ensemble import HistGradientBoostingClassifier
 from xgboost import XGBClassifier
 from lightgbm import LGBMClassifier
-from sklearn.metrics import accuracy_score
-from pymongo import MongoClient
+from sklearn.metrics import accuracy_score, classification_report
 import matplotlib.pyplot as plt
 import joblib
 import os
 
 os.makedirs("modelos", exist_ok=True)
 
-client = MongoClient("mongodb+srv://pss_user:Pasapera2310.@gptcluster.hj5l4pa.mongodb.net/?retryWrites=true&w=majority&appName=GPTCluster")
-db = client.pss_datos
-coleccion = db.respuestas
+data_path = "dataset_pss10_real.csv"
+df = pd.read_csv(data_path)
 
-docs = list(coleccion.find())
-df = pd.DataFrame(docs)
+X = df[[f"Q{i+1}" for i in range(10)]]
+y_str = df["estrés"]
+label_encoder = LabelEncoder()
+y = label_encoder.fit_transform(y_str)
 
-df = df.dropna(subset=["respuestas", "pred_MLP"])
-df = df[df["pred_MLP"].isin(["Bajo", "Medio", "Alto"])]
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
 
-X = pd.DataFrame(df["respuestas"].tolist(), columns=[f"Q{i+1}" for i in range(10)])
-y = LabelEncoder().fit_transform(df["pred_MLP"])
-
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+X_train, X_test, y_train, y_test = train_test_split(
+    X_scaled, y, test_size=0.2, random_state=42
+)
 
 modelos = {
-    "mlp": MLPClassifier(max_iter=150, random_state=42),
+    "mlp": MLPClassifier(max_iter=300, random_state=42),
     "hist": HistGradientBoostingClassifier(random_state=42),
     "xgb": XGBClassifier(use_label_encoder=False, eval_metric='mlogloss', random_state=42),
-    "lgb": LGBMClassifier(random_state=42)
+    "lgb": LGBMClassifier(
+        random_state=42,
+        num_leaves=31,
+        min_data_in_leaf=1,
+        max_depth=5,
+        verbose=-1
+    )
 }
 
 for nombre, modelo in modelos.items():
-    print(f"Entrenando modelo: {nombre.upper()}...")
+    print(f"\n🔧 Entrenando modelo: {nombre.upper()}...")
     modelo.fit(X_train, y_train)
     joblib.dump(modelo, f"modelos/modelo_{nombre}.pkl")
 
     acc_train = accuracy_score(y_train, modelo.predict(X_train))
     acc_test = accuracy_score(y_test, modelo.predict(X_test))
-    print(f"  - Precisión entrenamiento: {acc_train:.4f}")
-    print(f"  - Precisión prueba: {acc_test:.4f}")
 
-print("✅ Modelos entrenados y guardados en /modelos/")
+    print(f"   - Precisión entrenamiento: {acc_train:.4f}")
+    print(f"   - Precisión prueba:       {acc_test:.4f}")
+
+    print("\n📊 Classification Report:")
+    print(classification_report(y_test, modelo.predict(X_test), target_names=label_encoder.classes_))
+
+print("\n✅ Modelos entrenados correctamente y guardados en /modelos/")
