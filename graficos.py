@@ -8,13 +8,13 @@ from sklearn.neural_network import MLPClassifier
 from sklearn.ensemble import HistGradientBoostingClassifier
 from xgboost import XGBClassifier
 from lightgbm import LGBMClassifier
-import numpy as np
 
 client = MongoClient("mongodb+srv://pss_user:Pasapera2310.@gptcluster.hj5l4pa.mongodb.net/?retryWrites=true&w=majority&appName=GPTCluster")
 df = pd.DataFrame(list(client.pss_datos.respuestas.find()))
 
 df = df.dropna(subset=["respuestas", "pred_MLP"])
 df = df[df["pred_MLP"].isin(["Bajo", "Medio", "Alto"])]
+
 X = pd.DataFrame(df["respuestas"].tolist(), columns=[f"Q{i+1}" for i in range(10)])
 y = LabelEncoder().fit_transform(df["pred_MLP"])
 
@@ -24,8 +24,6 @@ modelos = {
     "LightGBM": LGBMClassifier(random_state=42),
     "HistGradientBoosting": HistGradientBoostingClassifier(random_state=42)
 }
-
-plt.figure(figsize=(12, 8))
 
 for nombre, modelo in modelos.items():
     acc_train_list = []
@@ -41,13 +39,15 @@ for nombre, modelo in modelos.items():
         acc_train_list.append(acc_train)
         acc_test_list.append(acc_test)
 
-    plt.plot(acc_train_list, label=f"{nombre} - Train", linestyle="--")
-    plt.plot(acc_test_list, label=f"{nombre} - Validation")
-
-plt.title("Model Accuracy per Epoch")
-plt.xlabel("Epoch")
-plt.ylabel("Accuracy")
-plt.legend()
-plt.grid(True)
-plt.tight_layout()
-plt.show()
+    plt.figure(figsize=(8, 5))
+    plt.plot(acc_train_list, label="Train Accuracy", linestyle="--", marker='o')
+    plt.plot(acc_test_list, label="Validation Accuracy", marker='s')
+    plt.title(f"{nombre} Accuracy Over Iterations", fontsize=14)
+    plt.xlabel("Iteration", fontsize=12)
+    plt.ylabel("Accuracy", fontsize=12)
+    plt.xticks(range(10))
+    plt.ylim(0.7, 1.05)
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
